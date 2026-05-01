@@ -28,11 +28,12 @@ Under **Repository permissions**:
 
 | Permission | Access | Why |
 |---|---|---|
-| `Contents` | Read & write | Create the install branch and commit the workflow file |
+| `Contents` | Read & write | Create the install branch and commit non-workflow files |
 | `Issues` | Read & write | Create the `auto:bug-scan` label |
 | `Metadata` | Read | Required by every App; auto-checked |
 | `Pull requests` | Read & write | Open the install PR |
 | `Secrets` | Read & write | Set the `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` repository secret. **Note**: this is a separate permission from `Actions` (which only covers workflows/runs/artifacts). The endpoint for repository Actions secrets requires the `Secrets` permission specifically. |
+| `Workflows` | Read & write | Commit `.github/workflows/daily-scan.yml`. GitHub blocks Apps from writing under `.github/workflows/` unless they have this permission *in addition to* `Contents` — a safeguard against arbitrary CI tampering. Without it, `PUT /repos/.../contents/.github/workflows/...` returns 403 "Resource not accessible by integration". |
 
 Leave **Actions**, **Organization permissions**, and **Account permissions** unset — we don't need them and the principle of least privilege keeps the blast radius small if the App key ever leaks.
 
