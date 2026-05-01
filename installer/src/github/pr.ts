@@ -94,6 +94,17 @@ export async function openInstallPr(args: {
 function prBody(): string {
   return `Adds the \`daily-scan\` reusable workflow to this repo. Once merged, it runs once a day and either files a bug-scan issue or opens a draft PR for one.
 
+## ⚠️ One more setup step before merging
+
+The agent action (Anthropic / OpenAI) authenticates at runtime via the upstream provider's official GitHub App — not via this installer. Install **one** of the following on this repo, matching whichever \`provider:\` you picked:
+
+- **Anthropic**: <https://github.com/apps/claude/installations/new>
+- **OpenAI**: <https://github.com/apps/openai-codex/installations/new>
+
+Without this, the workflow will fail on its first run with \`Could not fetch an OIDC token\` or \`<provider> is not installed on this repository\`.
+
+## What this workflow does
+
 The agent itself decides what counts as a bug, what to skip, and whether your repo has a validation strategy that allows auto-PRs.
 
 You can:

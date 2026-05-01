@@ -11,7 +11,10 @@ The install flow:
 1. **Click Install.** GitHub asks which repos to grant access to.
 2. **Pick an agent profile** on the setup page (Claude Sonnet 4.6 is the recommended default).
 3. **Paste your Anthropic or OpenAI API key.** It is forwarded once to GitHub Actions Secrets and never persisted by this service.
-4. **Merge the PR** that the App opens on each repo. That's it — the cron starts running.
+4. **Install the agent runtime App** on the same repo — this is required by the upstream agent action's OIDC auth flow:
+   - Anthropic: <https://github.com/apps/claude/installations/new>
+   - OpenAI: <https://github.com/apps/openai-codex/installations/new>
+5. **Merge the PR** that Fralle Bug Scanner opens on each repo. That's it — the cron starts running.
 
 ## What it does
 
