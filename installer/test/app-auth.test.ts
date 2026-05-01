@@ -36,6 +36,36 @@ vPXapxtVJo8UMN//4eglfk4QPNQ4BGoYBuzYkjRtvB7k4Dj5az7Q/epPnV9uYAfg
 w3/eZwP9wtc/3sAZHdzha45e
 -----END PRIVATE KEY-----`;
 
+// Same key as TEST_PEM, but in PKCS#1 (RSA-specific) format. GitHub Apps
+// generate keys this way; signAppJwt must wrap them in PKCS#8 internally.
+const TEST_PEM_PKCS1 = `-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA29ve6BFsfWP5UOFTk1dIlsJ5Lp/K0uHEWFvTYaw17NQMBop1
+B5NDGRm/xVv/xHT63mO+lkIvCLXavRm2fnVYFWPGVw04HbgvkBJw//Osai0vQPF3
+oFnRWF7GiA7DG2TqSiPG+LLFLHcKbGdkWCJzHvIO9E5oJZwVx+Nc2zWCpbtvdy//
+T5IRDtGFBNaT/IKZIvwR0Tor314AvA2ajxoW0RRmq3LIAhSloEus/A0BJVeD+qnc
+m7OpOIbGC8KzIIROvkachfcoyAqU545Kl65XhkrPbqHk8xaxo7ue0BmyNyROJ/FU
+s0+I72KhY2LjTOG0+ZUAI22gjSm1jUZrFmI2twIDAQABAoIBACJfzYmeE8bFBzlw
+iVcbifNcQ4MZI6Z1+vNPpAx81s+I1bp+Ek8VZKO7hWKvgB0wpvp3QNiQT3c+q4zu
+RLyfzx5FA8EfhXsMDY+qenViHT5agy1Vs3zkHhmBc+vY1wNk80aVMmo21SIfGIeb
+YLJw7GvVr6XdzmW28ibW8vEo/By6F7zbEjg3l26oU5Ba32g3EAXTrBa7gkXXTA6D
+SXMyQeOD2e6CV/o9eVBAMSXUs0AuNoPqLwNaMoDVk3Tpti2bfrThoQtt9QHs0WCn
+X6R0oxWu88O0K6sI0GVD+KiItnpmMSNyXojZhOyf8I5IDNQ76810OyWd2N+dmgJR
+ccfAzaECgYEA85Hog8oM/BgD8RRWHk/9zo+Q/Y4Y5pDCbUi1CjQyj96FK0d4Nh0H
+qFCPWe5qbzTBABepP41VIE27/nhqb2dkvc2hHbqHxCVqiwpuTH2nw/gFt528dch8
+kRUYHkOittsSzgglbi51RUs06UE9oqJl8QF/25/gManpDOLZMqYZthcCgYEA5xQx
+FRRSSQ/xb+Uys9UOZeR8qFh5+g7/EL0Ay6fGgisxSv8iy3GQEUSnsKfg4OSFgjJ1
+oOcdKt0S5sskhSYMwfyq/l/tpuvO3R4tagZhlIJ2xnnqYmHEeh+TM69SJHffGBME
+U957WukTZNsQIDEkSFnFDa6jRQCybvq23wpYiGECgYAKhIxz1G/HGwpgiK5HVNDy
+8IQkTtSIcEvVCES5EhP03nkFq2pne81u2Tu3eHIkJzUGWf82/VVltbWegXinIuHY
+yF5iuEFQmQUGyAaHSw3JipZEnY0b0PKAGVcXR3hpSQCA4R0sqtjpixvXzrdopHae
+d6AbzcWSn3Gu2sTiSQXnNQKBgQDXGlauNqJ6XJr0/Df8auHiO5VG6EVzXq5UmHu7
+GEyTMz3JgEKVevsO+AfZTAzrjA4zqmERDNJ76hsEOCmgwFCz604JSKbi8TM5ZjQE
+NDh1lBSYoThrqHLK88WFITinteY4dMtcfwf5Emn5Qmp6bQRHTTk/iUd2njV7VWsR
+qIHNQQKBgQCFCO67wzr8QYGpU3d1uWilKLBiLVGSyOfddlH1D0RplAknopKh8CxT
+U7lRLAZhyX+QIEou+Wv2sF+o5Q9++Lz12qcbVSaPFDDf/+HoJX5OEDzUOARqGAbs
+2JI0bbwe5OA4+Ws+0P3qT51fbmAH4MN/3mcD/cLXP97AGR3c4WuOXg==
+-----END RSA PRIVATE KEY-----`;
+
 describe("signAppJwt", () => {
   it("produces a three-part JWT with valid header and payload claims", async () => {
     const jwt = await signAppJwt("123456", TEST_PEM);
@@ -58,6 +88,26 @@ describe("signAppJwt", () => {
     const sig = jwt.split(".")[2]!;
     expect(sig).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(sig).not.toContain("=");
+  });
+
+  it("accepts PKCS#1 keys (the format GitHub Apps generate)", async () => {
+    const jwt = await signAppJwt("123456", TEST_PEM_PKCS1);
+    expect(jwt.split(".")).toHaveLength(3);
+  });
+
+  it("PKCS#1 and PKCS#8 forms of the same key produce identical signatures", async () => {
+    // Pin time so both signings get the same iat/exp and therefore the same
+    // payload bytes — the signatures should then be byte-identical, proving
+    // the PKCS#1→PKCS#8 wrapping is correct.
+    const realDateNow = Date.now;
+    Date.now = () => 1_700_000_000_000;
+    try {
+      const a = await signAppJwt("123456", TEST_PEM);
+      const b = await signAppJwt("123456", TEST_PEM_PKCS1);
+      expect(a).toBe(b);
+    } finally {
+      Date.now = realDateNow;
+    }
   });
 });
 

@@ -46,21 +46,73 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
 }
 
 function pemToArrayBuffer(pem: string): ArrayBuffer {
-  // Some env-var stores (notably Vercel's dashboard text input and several
-  // CI tools) deliver multi-line values with literal "\n" sequences in place
-  // of actual newlines. Normalize both forms to actual newlines before
-  // stripping whitespace; otherwise the literal backslash + n characters end
-  // up inside the base64 body and atob throws "Invalid keyData".
+  // Normalize literal "\n" sequences (sometimes pasted via env-var GUIs) to
+  // actual newlines before stripping whitespace, otherwise the backslash + n
+  // ends up inside the base64 body and atob throws "Invalid keyData".
   const normalized = pem.replace(/\\r\\n|\\n/g, "\n");
+
+  // GitHub Apps generate private keys in PKCS#1 format ("BEGIN RSA PRIVATE
+  // KEY"), but WebCrypto's importKey("pkcs8", …) requires PKCS#8 format
+  // ("BEGIN PRIVATE KEY"). Detect by the header and, when PKCS#1, wrap the
+  // raw RSA key in the PKCS#8 envelope (algorithm = rsaEncryption).
+  const isPkcs1 = /-----BEGIN RSA PRIVATE KEY-----/.test(normalized);
+
   const b64 = normalized
     .replace(/-----BEGIN [^-]+-----/g, "")
     .replace(/-----END [^-]+-----/g, "")
     .replace(/\s/g, "");
   const binary = atob(b64);
-  const buf = new ArrayBuffer(binary.length);
-  const view = new Uint8Array(buf);
-  for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const pkcs8 = isPkcs1 ? wrapPkcs1AsPkcs8(bytes) : bytes;
+  const buf = new ArrayBuffer(pkcs8.length);
+  new Uint8Array(buf).set(pkcs8);
   return buf;
+}
+
+// Wrap a raw PKCS#1 RSA private key in a PKCS#8 PrivateKeyInfo envelope so
+// WebCrypto can import it. The envelope is:
+//   SEQUENCE {
+//     INTEGER 0                       (version)
+//     SEQUENCE {                      (privateKeyAlgorithm)
+//       OID 1.2.840.113549.1.1.1      (rsaEncryption)
+//       NULL                          (parameters)
+//     }
+//     OCTET STRING { <pkcs1 bytes> }  (privateKey)
+//   }
+function wrapPkcs1AsPkcs8(pkcs1: Uint8Array): Uint8Array {
+  const version = Uint8Array.of(0x02, 0x01, 0x00);
+  const algIdentifier = Uint8Array.of(
+    0x30, 0x0d,             // SEQUENCE, len 13
+    0x06, 0x09,             // OID, len 9
+    0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
+    0x05, 0x00,             // NULL
+  );
+  const octetStringHeader = derTagAndLength(0x04, pkcs1.length);
+  const innerLength =
+    version.length + algIdentifier.length + octetStringHeader.length + pkcs1.length;
+  const outerHeader = derTagAndLength(0x30, innerLength);
+
+  const out = new Uint8Array(outerHeader.length + innerLength);
+  let i = 0;
+  out.set(outerHeader, i); i += outerHeader.length;
+  out.set(version, i); i += version.length;
+  out.set(algIdentifier, i); i += algIdentifier.length;
+  out.set(octetStringHeader, i); i += octetStringHeader.length;
+  out.set(pkcs1, i);
+  return out;
+}
+
+// DER length encoding: short form for <128, long form (0x80 + N length bytes,
+// big-endian) for larger. Most RSA keys land in the 1100–1200 byte range, so
+// length-of-length 2 covers them.
+function derTagAndLength(tag: number, length: number): Uint8Array {
+  if (length < 0x80) return Uint8Array.of(tag, length);
+  if (length <= 0xff) return Uint8Array.of(tag, 0x81, length);
+  if (length <= 0xffff) return Uint8Array.of(tag, 0x82, (length >> 8) & 0xff, length & 0xff);
+  if (length <= 0xffffff) return Uint8Array.of(tag, 0x83, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff);
+  return Uint8Array.of(tag, 0x84, (length >>> 24) & 0xff, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff);
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
