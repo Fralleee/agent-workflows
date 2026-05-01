@@ -127,6 +127,12 @@ function installFetchMock(opts: { failRepo?: string } = {}) {
     if (u.endsWith("/git/refs") && method === "POST") {
       return new Response(null, { status: 201 });
     }
+    // 7.5) GET existing file SHA (before PUT). For the happy path we report
+    // 404 = file doesn't exist yet; the failRepo case is exercised by the
+    // get-default-ref step above, so this branch isn't where failures inject.
+    if (/\/contents\/.+\?ref=/.test(u) && method === "GET") {
+      return new Response(null, { status: 404 });
+    }
     // 8) PUT contents
     if (/\/contents\/.+$/.test(u) && method === "PUT") {
       return jsonResponse({});
@@ -207,6 +213,53 @@ describe("runInstall", () => {
     expect(decoded).toContain("provider: openai");
     expect(decoded).toContain("model: gpt-5-thinking");
     expect(decoded).toContain("OPENAI_API_KEY");
+  });
+
+  it("supplies sha on PUT when the workflow file already exists (re-install path)", async () => {
+    // Override the GET-existing-sha branch to return a file rather than 404.
+    const kp = nacl.box.keyPair();
+    const pubB64 = btoa(String.fromCharCode(...kp.publicKey));
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+      const method = (init?.method ?? "GET").toUpperCase();
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url: u, method, body });
+      if (u.endsWith("/access_tokens") && method === "POST") {
+        return jsonResponse({ token: "ghs_test", expires_at: "2099-01-01T00:00:00Z" });
+      }
+      if (u.startsWith("https://api.github.com/installation/repositories")) {
+        return jsonResponse({
+          total_count: 1,
+          repositories: [
+            { id: 1, name: "alpha", full_name: "octocat/alpha", default_branch: "main", owner: { login: "octocat" } },
+          ],
+        });
+      }
+      if (u.endsWith("/actions/secrets/public-key")) return jsonResponse({ key_id: "kid-1", key: pubB64 });
+      if (/\/actions\/secrets\/[^/]+$/.test(u) && method === "PUT") return new Response(null, { status: 201 });
+      if (u.endsWith("/labels") && method === "POST") return new Response(null, { status: 201 });
+      if (u.includes("/git/ref/heads/")) return jsonResponse({ object: { sha: "deadbeef" } });
+      if (u.endsWith("/git/refs") && method === "POST") return new Response(null, { status: 201 });
+      // Existing file lookup returns SHA instead of 404.
+      if (/\/contents\/.+\?ref=/.test(u) && method === "GET") {
+        return jsonResponse({ sha: "existing-file-sha-abc123" });
+      }
+      if (/\/contents\/.+$/.test(u) && method === "PUT") return jsonResponse({});
+      if (u.endsWith("/pulls") && method === "POST") {
+        return jsonResponse({ number: 9, html_url: `${u.replace(/\/pulls$/, "")}/pull/9` });
+      }
+      throw new Error(`unmocked: ${method} ${u}`);
+    }) as typeof globalThis.fetch;
+
+    const results = await runInstall(FORM, ENV);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.prUrl).toBeTruthy();
+
+    const putCall = calls.find((c) => c.method === "PUT" && c.url.includes("/contents/") && !c.url.includes("?ref="));
+    expect(putCall).toBeDefined();
+    const putBody = JSON.parse(putCall!.body!);
+    expect(putBody.sha).toBe("existing-file-sha-abc123");
+    expect(putBody.message).toBe("ci: update daily bug-scan agent config");
   });
 });
 

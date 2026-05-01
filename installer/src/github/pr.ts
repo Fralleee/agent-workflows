@@ -53,16 +53,30 @@ export async function openInstallPr(args: {
   }
 
   // 2) Commit the file onto the new branch.
+  // If the file already exists on this branch (because the consumer previously
+  // merged an install PR), the PUT requires the file's current SHA. Detect by
+  // GET first; missing → create, present → update.
+  const existingSha = await getExistingFileSha(
+    args.installToken,
+    args.owner,
+    args.repo,
+    path,
+    branch,
+  );
   const contentB64 = btoa(unescape(encodeURIComponent(args.fileContent)));
+  const commitMessage = existingSha
+    ? "ci: update daily bug-scan agent config"
+    : "ci: add daily bug-scan agent";
   const putRes = await fetch(
     `${GITHUB_API}/repos/${args.owner}/${args.repo}/contents/${path}`,
     {
       method: "PUT",
       headers,
       body: JSON.stringify({
-        message: "ci: add daily bug-scan agent",
+        message: commitMessage,
         content: contentB64,
         branch,
+        ...(existingSha ? { sha: existingSha } : {}),
       }),
     },
   );
@@ -89,6 +103,36 @@ export async function openInstallPr(args: {
   }
   const prJson = (await prRes.json()) as { number: number; html_url: string };
   return { url: prJson.html_url, number: prJson.number };
+}
+
+// GET the current SHA of a file at a path on a branch, if it exists.
+// Returns undefined when the file is absent (404). Used so we can supply the
+// `sha` field on PUT contents when overwriting an existing file (required by
+// the GitHub API).
+async function getExistingFileSha(
+  installToken: string,
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+): Promise<string | undefined> {
+  const res = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${installToken}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "agent-workflows-installer",
+      },
+    },
+  );
+  if (res.status === 404) return undefined;
+  if (!res.ok) {
+    throw new Error(`get file sha failed: ${res.status} ${await res.text()}`);
+  }
+  const json = (await res.json()) as { sha: string };
+  return json.sha;
 }
 
 function prBody(): string {
