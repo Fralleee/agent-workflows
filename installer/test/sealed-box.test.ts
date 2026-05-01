@@ -4,7 +4,7 @@ import {
   cryptoBoxSeal,
   cryptoBoxSealOpen,
   encryptSecretValue,
-} from "../src/github/secrets.js";
+} from "../src/crypto/sealed-box.js";
 
 describe("crypto_box_seal", () => {
   it("seals a message that the matching keypair can open", () => {

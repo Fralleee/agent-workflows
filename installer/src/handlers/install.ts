@@ -7,14 +7,7 @@
 
 import { resolveProfile, type Provider } from "../profiles.js";
 import { renderStub } from "../stub.js";
-import {
-  signAppJwt,
-  getInstallationToken,
-  listInstallationRepos,
-} from "../github/app-auth.js";
-import { putRepoSecret } from "../github/secrets.js";
-import { ensureLabel } from "../github/label.js";
-import { openInstallPr } from "../github/pr.js";
+import { createGitHubClient, type GitHubClient } from "../github/client.js";
 
 export interface InstallEnv {
   GITHUB_APP_ID: string;
@@ -39,9 +32,14 @@ export interface RepoResult {
   error?: string;
 }
 
+const STUB_PATH = ".github/workflows/daily-scan.yml";
+
 export async function runInstall(
   form: InstallFormData,
   env: InstallEnv,
+  // For tests: inject a fake client. In production, the default factory
+  // mints a real client via JWT signing + token exchange.
+  client?: GitHubClient,
 ): Promise<RepoResult[]> {
   const { provider, model, secretName } = resolveProfile(
     form.profileId,
@@ -50,9 +48,15 @@ export async function runInstall(
       : undefined,
   );
 
-  const jwt = await signAppJwt(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
-  const { token } = await getInstallationToken(jwt, form.installationId);
-  const repos = await listInstallationRepos(token);
+  const c =
+    client ??
+    (await createGitHubClient({
+      appId: env.GITHUB_APP_ID,
+      privateKeyPem: env.GITHUB_APP_PRIVATE_KEY,
+      installationId: form.installationId,
+    }));
+
+  const repos = await c.listInstallationRepos();
 
   const stub = renderStub({
     hubRepo: env.HUB_REPO,
@@ -69,14 +73,18 @@ export async function runInstall(
   await runWithConcurrency(repos, 4, async (repo) => {
     const owner = repo.owner.login;
     try {
-      await ensureLabel(token, owner, repo.name, env.LABEL);
-      await putRepoSecret(token, owner, repo.name, secretName, form.apiKey);
-      const pr = await openInstallPr({
-        installToken: token,
+      await c.ensureLabel(owner, repo.name, env.LABEL);
+      await c.putRepoSecret(owner, repo.name, secretName, form.apiKey);
+      const pr = await c.openSingleFilePr({
         owner,
         repo: repo.name,
         defaultBranch: repo.default_branch,
+        filePath: STUB_PATH,
         fileContent: stub,
+        prTitle: "ci: add daily bug-scan agent",
+        prBody: installPrBody(),
+        commitMessageNew: "ci: add daily bug-scan agent",
+        commitMessageUpdate: "ci: update daily bug-scan agent config",
       });
       results.push({ repo: repo.full_name, prUrl: pr.url });
     } catch (e) {
@@ -110,6 +118,20 @@ async function runWithConcurrency<T>(
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return String(e);
+}
+
+function installPrBody(): string {
+  return `Adds the \`daily-scan\` reusable workflow to this repo. Once merged, it runs once a day and either files a bug-scan issue or opens a draft PR for one.
+
+The agent itself decides what counts as a bug, what to skip, and whether your repo has a validation strategy that allows auto-PRs.
+
+You can:
+- **Adjust the schedule** — edit the \`cron\` line.
+- **Switch agent profile** — change \`provider:\` and \`model:\`.
+- **Enable auto-PR** — flip \`enable-auto-pr\` to \`true\` after a few weeks of issue-only mode.
+- **Override validation** — set \`validate-command\` if discovery picks the wrong thing.
+
+Filed automatically by the agent-workflows installer.`;
 }
 
 export function renderInstallResults(results: RepoResult[]): Response {

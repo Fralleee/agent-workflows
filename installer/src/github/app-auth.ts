@@ -1,10 +1,9 @@
-// GitHub App authentication on Vercel Edge runtime — no Octokit, just fetch + WebCrypto.
+// GitHub App authentication primitives. Internal to the github/ package — the
+// rest of the codebase only sees GitHubClient (in client.ts), constructed via
+// createGitHubClient(...). These two functions are the auth side of that flow.
 //
-// Two-step auth:
-//   1) Sign a short-lived (10-min) JWT with the App's RSA private key (RS256)
-//   2) Exchange the JWT for an installation access token (1-hour lifetime)
-//
-// The install token is what every subsequent REST call uses as Bearer auth.
+//   1) signAppJwt — short-lived (10-min) JWT signed with the App's RSA key.
+//   2) getInstallationToken — exchange the JWT for a 1-hour installation token.
 
 import { importRsaPrivateKey } from "../crypto/pem-rsa.js";
 
@@ -89,45 +88,4 @@ export async function getInstallationToken(
 
   const json = (await res.json()) as { token: string; expires_at: string };
   return { token: json.token, expiresAt: json.expires_at };
-}
-
-// Convenience: list the repos the install can access. Used by the setup form to
-// show "this install covers N repos — install on all of them?"
-export interface InstallationRepo {
-  id: number;
-  name: string;
-  full_name: string;
-  default_branch: string;
-  owner: { login: string };
-}
-
-export async function listInstallationRepos(
-  installToken: string,
-): Promise<InstallationRepo[]> {
-  const repos: InstallationRepo[] = [];
-  let page = 1;
-  for (;;) {
-    const res = await fetch(
-      `${GITHUB_API}/installation/repositories?per_page=100&page=${page}`,
-      {
-        headers: {
-          Authorization: `Bearer ${installToken}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "agent-workflows-installer",
-        },
-      },
-    );
-    if (!res.ok) {
-      throw new Error(`list installation repos failed: ${res.status}`);
-    }
-    const json = (await res.json()) as {
-      total_count: number;
-      repositories: InstallationRepo[];
-    };
-    repos.push(...json.repositories);
-    if (repos.length >= json.total_count || json.repositories.length === 0) break;
-    page++;
-  }
-  return repos;
 }
