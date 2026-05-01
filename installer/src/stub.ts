@@ -20,6 +20,14 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
+# The reusable workflow needs to file issues, open PRs, and (in fix mode)
+# push branches. The caller has to grant those — reusable workflows can
+# only request permissions, not raise them above the caller's scope.
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   scan:
     uses: ${opts.hubRepo}/.github/workflows/daily-scan.yml@${opts.hubRef}

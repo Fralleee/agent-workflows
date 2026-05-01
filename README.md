@@ -64,6 +64,11 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   scan:
     uses: Fralleee/agent-workflows/.github/workflows/daily-scan.yml@v1
