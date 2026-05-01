@@ -4,9 +4,7 @@ Daily AI bug-scanning for your GitHub repos. One click installs a workflow that 
 
 ## Install — one click
 
-> **NOTE for the maintainer:** until the GitHub App is registered and the Vercel Edge function is deployed, the install link below is a placeholder. See [`docs/github-app-registration.md`](docs/github-app-registration.md) and [`docs/deployment.md`](docs/deployment.md).
-
-[**→ Install agent-workflows on your repo**](https://github.com/apps/agent-workflows/installations/new)
+[**→ Install Fralle Bug Scanner on your repo**](https://github.com/apps/fralle-bug-scanner/installations/new)
 
 The install flow:
 
