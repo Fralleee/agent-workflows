@@ -43,6 +43,11 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  # The agent actions (anthropics/claude-code-action, openai/codex-action)
+  # mint OIDC tokens to verify runner identity for some optional integrations.
+  # Without id-token: write the action errors with "Could not fetch an OIDC
+  # token" before it ever calls the model.
+  id-token: write
 
 jobs:
   scan:

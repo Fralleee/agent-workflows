@@ -21,13 +21,14 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
-# The reusable workflow needs to file issues, open PRs, and (in fix mode)
-# push branches. The caller has to grant those — reusable workflows can
-# only request permissions, not raise them above the caller's scope.
+# The reusable workflow needs to file issues, open PRs, push branches,
+# and mint OIDC tokens for the agent action. Reusable workflows can
+# only request permissions; the caller has to grant them.
 permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 jobs:
   scan:
