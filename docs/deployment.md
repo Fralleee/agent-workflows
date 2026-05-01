@@ -26,8 +26,9 @@ bunx vercel login
 bunx vercel link
 ```
 
-`vercel login` opens a browser to authenticate (GitHub, GitLab, etc. or email).
-`vercel link` either picks an existing project or creates a new one. Accept the defaults — Vercel auto-detects this as a "Other" project with the function in `api/`.
+`vercel login` uses OAuth 2.0 Device Flow (since Feb 2026). It prints a one-time code and opens a browser tab to `vercel.com/oauth/device`; you confirm the location/IP/timestamp on the page and the CLI receives the token. Old email-based and `--github`/`--gitlab` flag flows have been removed — the unified device flow is the only path now.
+
+`vercel link` either picks an existing project or creates a new one. Accept the defaults — Vercel auto-detects this as an "Other" project with the function in `api/`.
 
 ## 3. Set Vercel environment variables
 
