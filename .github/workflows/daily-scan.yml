@@ -174,7 +174,14 @@ jobs:
           git config --global user.name "agent-workflows[bot]"
           npm install -g @openai/codex
           MODEL="${{ inputs.model != '' && inputs.model || 'gpt-5' }}"
+          # --sandbox danger-full-access disables Codex's internal bubblewrap
+          # sandbox. GitHub Actions runners don't permit the network-namespace
+          # operations (RTM_NEWADDR) bwrap needs, so workspace-write fails
+          # before the agent ever runs. The runner itself is an ephemeral
+          # container — an extra in-process sandbox here provides no real
+          # safety boundary, only blocks operation.
           codex exec \
             --model "$MODEL" \
-            --sandbox workspace-write \
+            --sandbox danger-full-access \
+            --skip-git-repo-check \
             < .agent-workflows/prompts/daily-scan.md
