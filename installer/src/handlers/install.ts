@@ -133,14 +133,13 @@ export function renderInstallResults(results: RepoResult[]): Response {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Install complete</title>
-<style>body{font-family:-apple-system,system-ui,sans-serif;max-width:640px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1{font-size:1.5rem}h2{font-size:1.1rem}.ok{color:#22863a}.fail{color:#cb2431}ul{padding-left:1.25rem}.warn{background:#fff5d4;border-left:3px solid #d4a72c;padding:0.75rem 1rem;border-radius:4px;margin:1rem 0}.warn a{color:#0366d6}@media(prefers-color-scheme:dark){body{background:#0f1014;color:#f1f1f4}.warn{background:#3a2f10;border-left-color:#d4a72c}}</style>
+<style>body{font-family:-apple-system,system-ui,sans-serif;max-width:640px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1{font-size:1.5rem}h2{font-size:1.1rem}.ok{color:#22863a}.fail{color:#cb2431}ul{padding-left:1.25rem}@media(prefers-color-scheme:dark){body{background:#0f1014;color:#f1f1f4}}</style>
 </head><body>
   <h1>Install complete</h1>
-  <p>Your API key has been forwarded to each repo's GitHub Actions secrets and is no longer in this service's memory.</p>
+  <p>Your API key has been forwarded to each repo's GitHub Actions secrets and is no longer in this service's memory. Review and merge the PRs below to start scheduling scans.</p>
   ${ok.length > 0 ? `<h2 class="ok">PR opened (${ok.length})</h2><ul>${okList}</ul>` : ""}
   ${failed.length > 0 ? `<h2 class="fail">Failed (${failed.length})</h2><ul>${failList}</ul><p>You can re-visit the install URL to retry; secrets that succeeded won't be re-set.</p>` : ""}
   ${ok.length === 0 && failed.length === 0 ? "<p>No repos were attached to this install. Add some at GitHub → Applications → Configure → Repository access.</p>" : ""}
-  ${ok.length > 0 ? `<div class="warn"><strong>One more step before merging:</strong> the upstream agent action requires its provider's GitHub App on the same repo. Install the matching one:<ul><li>Anthropic: <a href="https://github.com/apps/claude/installations/new" target="_blank" rel="noopener">github.com/apps/claude</a></li><li>OpenAI: <a href="https://github.com/apps/openai-codex/installations/new" target="_blank" rel="noopener">github.com/apps/openai-codex</a></li></ul>Without it, the workflow fails on first run with "Could not fetch an OIDC token" or "&lt;provider&gt; is not installed on this repository".</div>` : ""}
 </body></html>`;
 
   return new Response(html, {
