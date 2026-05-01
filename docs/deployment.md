@@ -17,18 +17,23 @@ bun install
 
 `vercel` (the CLI) is in `devDependencies` so it's pinned and runnable via `bunx vercel`.
 
-## 2. Link the directory to a Vercel project
+## 2. Link the project from the repo root
 
-From inside `installer/`:
+**Important: link from the repo root, not from `installer/`.** Vercel's "Root Directory" setting (which we set to `installer` in the dashboard) is applied as a subdirectory of wherever the project is linked, so linking from `installer/` and then setting Root Directory = `installer` would make Vercel look for `installer/installer/` — non-existent.
+
+From the **repo root** (one level up from `installer/`):
 
 ```bash
+cd ..                  # if you're currently inside installer/
 bunx vercel login
 bunx vercel link
 ```
 
 `vercel login` uses OAuth 2.0 Device Flow (since Feb 2026). It prints a one-time code and opens a browser tab to `vercel.com/oauth/device`; you confirm the location/IP/timestamp on the page and the CLI receives the token. Old email-based and `--github`/`--gitlab` flag flows have been removed — the unified device flow is the only path now.
 
-`vercel link` either picks an existing project or creates a new one. Accept the defaults — Vercel auto-detects this as an "Other" project with the function in `api/`.
+`vercel link` either picks an existing project or creates a new one. Accept the defaults — Vercel auto-detects the project, and your dashboard Root Directory of `installer` directs it into the right subfolder for both CLI and git-pushed deploys.
+
+The `installer/` package.json scripts (`bun run dev`, `bun run deploy`) pass `--cwd ..` to vercel so they work correctly from inside `installer/` while pointing at the repo-root-linked project.
 
 ## 3. Set Vercel environment variables
 

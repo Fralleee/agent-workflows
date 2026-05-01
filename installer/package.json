@@ -5,10 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "vercel dev --cwd ..",
     "dev:preview": "bun --hot scripts/dev.ts",
-    "deploy": "vercel deploy --prod",
-    "deploy:preview": "vercel deploy",
+    "deploy": "vercel deploy --prod --cwd ..",
+    "deploy:preview": "vercel deploy --cwd ..",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
