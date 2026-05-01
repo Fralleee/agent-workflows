@@ -19,20 +19,40 @@ let cachedKey: ImportedKey | undefined;
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   if (cachedKey && cachedKey.pem === pem) return cachedKey.key;
 
-  const pkcs8 = pemToArrayBuffer(pem);
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pkcs8,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  cachedKey = { pem, key };
-  return key;
+  let pkcs8: ArrayBuffer;
+  try {
+    pkcs8 = pemToArrayBuffer(pem);
+  } catch (e) {
+    throw new Error(
+      `GITHUB_APP_PRIVATE_KEY did not decode as PEM. Make sure the env var holds the full PEM including BEGIN/END lines, with real newlines (not literal \\n). Underlying: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  try {
+    const key = await crypto.subtle.importKey(
+      "pkcs8",
+      pkcs8,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    cachedKey = { pem, key };
+    return key;
+  } catch (e) {
+    throw new Error(
+      `GITHUB_APP_PRIVATE_KEY isn't a valid RSA PKCS8 key. The PEM decoded but WebCrypto rejected it. Underlying: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
 }
 
 function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const b64 = pem
+  // Some env-var stores (notably Vercel's dashboard text input and several
+  // CI tools) deliver multi-line values with literal "\n" sequences in place
+  // of actual newlines. Normalize both forms to actual newlines before
+  // stripping whitespace; otherwise the literal backslash + n characters end
+  // up inside the base64 body and atob throws "Invalid keyData".
+  const normalized = pem.replace(/\\r\\n|\\n/g, "\n");
+  const b64 = normalized
     .replace(/-----BEGIN [^-]+-----/g, "")
     .replace(/-----END [^-]+-----/g, "")
     .replace(/\s/g, "");
