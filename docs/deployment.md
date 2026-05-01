@@ -17,7 +17,15 @@ bun install
 
 `vercel` (the CLI) is in `devDependencies` so it's pinned and runnable via `bunx vercel`.
 
-## 2. Link the project from the repo root
+## 2. Set Framework Preset to "Other" in the project settings
+
+When the project is first created, Vercel scans `package.json` and auto-detects **Hono** as the framework (because we depend on `hono`). The Hono preset expects a `src/index.ts` with `export default app` and tries to deploy that as a Node serverless function — which conflicts with our setup (Edge runtime, custom `api/[[...slug]].ts` catch-all, no top-level default export).
+
+In the project settings under **Build and Deployment → Framework Preset**, click **Override** and select **Other**. Save. With "Other", Vercel only deploys files in `api/*` as functions and respects our `vercel.json` rewrites.
+
+This must be done before (or right after) the first deploy, otherwise every request returns `500: FUNCTION_INVOCATION_FAILED` with `Invalid export found in module "/var/task/installer/src/app.js"`.
+
+## 3. Link the project from the repo root
 
 **Important: link from the repo root, not from `installer/`.** Vercel's "Root Directory" setting (which we set to `installer` in the dashboard) is applied as a subdirectory of wherever the project is linked, so linking from `installer/` and then setting Root Directory = `installer` would make Vercel look for `installer/installer/` — non-existent.
 
@@ -35,7 +43,7 @@ bunx vercel link
 
 The `installer/` package.json scripts (`bun run dev`, `bun run deploy`) pass `--cwd ..` to vercel so they work correctly from inside `installer/` while pointing at the repo-root-linked project.
 
-## 3. Set Vercel environment variables
+## 4. Set Vercel environment variables
 
 These are the runtime env vars the Edge function reads via `process.env`. Set each one — Vercel prompts for the value after running each command. **Required** values:
 
@@ -67,7 +75,7 @@ To verify (shows names only, not values):
 bunx vercel env ls
 ```
 
-## 4. Pull env vars locally for `vercel dev`
+## 5. Pull env vars locally for `vercel dev`
 
 ```bash
 bunx vercel env pull .env.local
@@ -75,7 +83,7 @@ bunx vercel env pull .env.local
 
 This writes the env vars into `.env.local` (gitignored) so `vercel dev` can run with the same secrets the deployed function uses.
 
-## 5. Deploy
+## 6. Deploy
 
 ```bash
 bun run deploy
@@ -89,7 +97,7 @@ For preview deploys (a unique URL per push, no production aliasing):
 bun run deploy:preview
 ```
 
-## 6. Wire the URLs back into the GitHub App config
+## 7. Wire the URLs back into the GitHub App config
 
 Go back to your App's settings page on GitHub and set:
 
@@ -99,7 +107,7 @@ Go back to your App's settings page on GitHub and set:
 
 Save.
 
-## 7. Smoke test
+## 8. Smoke test
 
 1. Visit `https://<your-vercel-url>/health` — should return `ok`.
 2. Visit `https://<your-vercel-url>/` — should redirect to `https://github.com/apps/<APP_SLUG>/installations/new`.
@@ -111,7 +119,7 @@ Save.
    - The label `auto:bug-scan` exists.
    - A PR was opened with `.github/workflows/daily-scan.yml`.
 
-## 8. (Optional) Custom domain
+## 9. (Optional) Custom domain
 
 Vercel gives you a free `*.vercel.app` subdomain. To use a custom domain:
 
@@ -120,7 +128,7 @@ Vercel gives you a free `*.vercel.app` subdomain. To use a custom domain:
 3. Wait for cert provisioning (~minutes).
 4. Update the GitHub App's URLs to the custom domain.
 
-## 9. (Optional) Marketplace listing
+## 10. (Optional) Marketplace listing
 
 Phase 2 — submit the App for a public Marketplace listing. Requires:
 
