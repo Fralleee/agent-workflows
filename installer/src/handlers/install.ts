@@ -2,12 +2,13 @@
 //   1) ensure label
 //   2) PUT actions secret (API key, encrypted with sealed_box)
 //   3) open PR adding .github/workflows/daily-scan.yml
-// Per-repo failures are isolated. Returns RepoResult[]; renderInstallResults
-// turns those into the success page.
+// Per-repo failures are isolated. Returns RepoResult[] from runInstall;
+// renderInstallResults wraps the view in a Response.
 
 import { resolveProfile, type Provider } from "../profiles.js";
 import { renderStub } from "../stub.js";
 import { createGitHubClient, type GitHubClient } from "../github/client.js";
+import { installResultPageHtml } from "../views/install-result-page.js";
 
 export interface InstallEnv {
   GITHUB_APP_ID: string;
@@ -33,6 +34,9 @@ export interface RepoResult {
 }
 
 const STUB_PATH = ".github/workflows/daily-scan.yml";
+const PR_TITLE = "ci: add daily bug-scan agent";
+const COMMIT_MESSAGE_NEW = "ci: add daily bug-scan agent";
+const COMMIT_MESSAGE_UPDATE = "ci: update daily bug-scan agent config";
 
 export async function runInstall(
   form: InstallFormData,
@@ -81,10 +85,10 @@ export async function runInstall(
         defaultBranch: repo.default_branch,
         filePath: STUB_PATH,
         fileContent: stub,
-        prTitle: "ci: add daily bug-scan agent",
+        prTitle: PR_TITLE,
         prBody: installPrBody(),
-        commitMessageNew: "ci: add daily bug-scan agent",
-        commitMessageUpdate: "ci: update daily bug-scan agent config",
+        commitMessageNew: COMMIT_MESSAGE_NEW,
+        commitMessageUpdate: COMMIT_MESSAGE_UPDATE,
       });
       results.push({ repo: repo.full_name, prUrl: pr.url });
     } catch (e) {
@@ -135,48 +139,10 @@ Filed automatically by the agent-workflows installer.`;
 }
 
 export function renderInstallResults(results: RepoResult[]): Response {
-  const ok = results.filter((r) => r.prUrl);
-  const failed = results.filter((r) => r.error);
-
-  const okList = ok
-    .map(
-      (r) =>
-        `<li><strong>${escapeHtml(r.repo)}</strong> — <a href="${escapeHtml(r.prUrl ?? "")}" target="_blank" rel="noopener">PR opened</a></li>`,
-    )
-    .join("\n        ");
-  const failList = failed
-    .map(
-      (r) =>
-        `<li><strong>${escapeHtml(r.repo)}</strong> — ${escapeHtml(r.error ?? "")}</li>`,
-    )
-    .join("\n        ");
-
-  const html = `<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Install complete</title>
-<style>body{font-family:-apple-system,system-ui,sans-serif;max-width:640px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1{font-size:1.5rem}h2{font-size:1.1rem}.ok{color:#22863a}.fail{color:#cb2431}ul{padding-left:1.25rem}@media(prefers-color-scheme:dark){body{background:#0f1014;color:#f1f1f4}}</style>
-</head><body>
-  <h1>Install complete</h1>
-  <p>Your API key has been forwarded to each repo's GitHub Actions secrets and is no longer in this service's memory. Review and merge the PRs below to start scheduling scans.</p>
-  ${ok.length > 0 ? `<h2 class="ok">PR opened (${ok.length})</h2><ul>${okList}</ul>` : ""}
-  ${failed.length > 0 ? `<h2 class="fail">Failed (${failed.length})</h2><ul>${failList}</ul><p>You can re-visit the install URL to retry; secrets that succeeded won't be re-set.</p>` : ""}
-  ${ok.length === 0 && failed.length === 0 ? "<p>No repos were attached to this install. Add some at GitHub → Applications → Configure → Repository access.</p>" : ""}
-</body></html>`;
-
-  return new Response(html, {
+  return new Response(installResultPageHtml(results), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
     },
   });
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
