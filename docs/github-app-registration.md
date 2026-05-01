@@ -28,13 +28,13 @@ Under **Repository permissions**:
 
 | Permission | Access | Why |
 |---|---|---|
-| `Actions` | Read & write | Set the `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` repository secret |
 | `Contents` | Read & write | Create the install branch and commit the workflow file |
 | `Issues` | Read & write | Create the `auto:bug-scan` label |
 | `Metadata` | Read | Required by every App; auto-checked |
 | `Pull requests` | Read & write | Open the install PR |
+| `Secrets` | Read & write | Set the `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` repository secret. **Note**: this is a separate permission from `Actions` (which only covers workflows/runs/artifacts). The endpoint for repository Actions secrets requires the `Secrets` permission specifically. |
 
-Leave **Organization permissions** and **Account permissions** unset.
+Leave **Actions**, **Organization permissions**, and **Account permissions** unset — we don't need them and the principle of least privilege keeps the blast radius small if the App key ever leaks.
 
 ## 3. Subscribe to events
 
