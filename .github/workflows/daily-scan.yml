@@ -1,0 +1,95 @@
+name: Daily bug scan (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      scan-scope:
+        description: "changed-7d | full | rotating"
+        required: false
+        type: string
+        default: "changed-7d"
+      enable-auto-pr:
+        description: "If true, agent may open draft PRs to fix issues — but only if it discovers a validation strategy in the repo. If false, issues only."
+        required: false
+        type: boolean
+        default: false
+      model:
+        description: "Anthropic model id"
+        required: false
+        type: string
+        default: "claude-sonnet-4-6"
+      label:
+        description: "Label applied to all bot-created issues/PRs"
+        required: false
+        type: string
+        default: "auto:bug-scan"
+      validate-command:
+        description: "Optional override. If set, agent uses this exact command before opening any PR. If empty, agent discovers from package.json/Makefile/etc."
+        required: false
+        type: string
+        default: ""
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: daily-scan-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout consumer repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 30
+
+      - name: Checkout hub repo (for prompt)
+        uses: actions/checkout@v4
+        with:
+          repository: Fralleee/agent-workflows
+          ref: ${{ github.workflow_ref && github.workflow_sha || 'main' }}
+          path: .agent-workflows
+          fetch-depth: 1
+
+      # Install both Bun and Node so the agent can use whichever the repo needs.
+      # Each setup step is cheap if unused — the agent picks based on lockfiles.
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        continue-on-error: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Load prompt
+        id: load-prompt
+        shell: bash
+        run: |
+          {
+            echo 'PROMPT<<PROMPT_EOF'
+            cat .agent-workflows/prompts/daily-scan.md
+            echo PROMPT_EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.load-prompt.outputs.PROMPT }}
+          claude_args: |
+            --model ${{ inputs.model }}
+            --allowed-tools Read,Grep,Glob,Bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_SCAN_SCOPE: ${{ inputs.scan-scope }}
+          INPUT_ENABLE_AUTO_PR: ${{ inputs.enable-auto-pr }}
+          INPUT_LABEL: ${{ inputs.label }}
+          INPUT_VALIDATE_COMMAND: ${{ inputs.validate-command }}
