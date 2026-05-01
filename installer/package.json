@@ -1,0 +1,25 @@
+{
+  "name": "agent-workflows-installer",
+  "version": "0.1.0",
+  "description": "GitHub App + Vercel Edge function that one-click installs the agent-workflows daily-scan workflow into a consumer repo.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "dev:preview": "bun --hot scripts/dev.ts",
+    "deploy": "vercel deploy --prod",
+    "deploy:preview": "vercel deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "tweetnacl": "^1.0.3",
+    "@noble/hashes": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.5.0",
+    "vercel": "^39.0.0"
+  }
+}

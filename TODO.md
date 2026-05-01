@@ -1,3 +1,0 @@
-- Make it more versatile
-- Support other agents, not only Anthropic
-- Easy to install

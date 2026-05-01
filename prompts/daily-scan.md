@@ -8,6 +8,7 @@ You are running as a scheduled GitHub Action inside a repository. Your job is to
 - `INPUT_SCAN_SCOPE` — one of `changed-7d`, `full`, `rotating`. Determines which files to scan in SCAN MODE.
 - `INPUT_ENABLE_AUTO_PR` — `true` or `false`. If `false`, never open PRs.
 - `INPUT_VALIDATE_COMMAND` — optional override. If non-empty, use it verbatim. If empty, discover validation yourself (Step 0).
+- `INPUT_PACKAGE_MANAGER` — `bun` | `pnpm` | `yarn` | `npm` | `none`. Pre-detected by the workflow from lockfiles. Use this; only fall back to lockfile sniffing if it's empty.
 
 ## Step 0 — Discover the repo
 
@@ -19,17 +20,19 @@ If `AGENTS.md` exists at the repo root, read it. If `CLAUDE.md` exists, read it.
 
 ### 0b. Detect package manager / runtime
 
-Check which lockfiles exist:
+If `INPUT_PACKAGE_MANAGER` is non-empty and not `none`, use it directly — the workflow has already installed the matching toolchain (Bun for `bun`; Node + corepack for `pnpm`/`yarn`; Node + npm for `npm`). Skip to 0c.
+
+Otherwise (env var empty or `none`), check which lockfiles or project files exist:
 
 - `bun.lockb` or `bun.lock` → use `bun`
-- `pnpm-lock.yaml` → use `pnpm` (run `corepack enable` first if needed)
+- `pnpm-lock.yaml` → use `pnpm`
 - `yarn.lock` → use `yarn`
 - `package-lock.json` → use `npm`
 - `Cargo.toml` → Rust, use `cargo`
 - `pyproject.toml` / `requirements.txt` → Python; check for `uv`/`poetry`/`pip`
 - `go.mod` → Go, use `go`
 
-If multiple are present, prefer in order: bun > pnpm > yarn > npm. If none of the above and there's no recognizable build system, treat this as a "no-toolchain repo" — proceed carefully (see 0d).
+If multiple JS lockfiles are present, prefer in order: bun > pnpm > yarn > npm. If none of the above and there's no recognizable build system, treat this as a "no-toolchain repo" — proceed carefully (see 0d).
 
 ### 0c. Discover validation strategy
 
