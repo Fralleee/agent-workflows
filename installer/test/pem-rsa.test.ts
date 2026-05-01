@@ -1,13 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { signAppJwt } from "../src/github/app-auth.js";
+import { importRsaPrivateKey } from "../src/crypto/pem-rsa.js";
 
-// Test-only RSA-2048 PKCS8 key. Generated once via:
-//   bun -e 'const k = await crypto.subtle.generateKey({name:"RSASSA-PKCS1-v1_5",
-//     modulusLength:2048, publicExponent:new Uint8Array([1,0,1]), hash:"SHA-256"},
-//     true, ["sign","verify"]); const pkcs8 = await crypto.subtle.exportKey("pkcs8",
-//     k.privateKey); console.log(Buffer.from(pkcs8).toString("base64"));'
-// then wrapped with PEM headers. Do not use anywhere except these tests.
-const TEST_PEM = `-----BEGIN PRIVATE KEY-----
+// Same test-only RSA-2048 key in two formats (PKCS#8 and PKCS#1).
+// See test/app-auth.test.ts header comment for how it was generated.
+const PKCS8_PEM = `-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDb297oEWx9Y/lQ
 4VOTV0iWwnkun8rS4cRYW9NhrDXs1AwGinUHk0MZGb/FW//EdPreY76WQi8Itdq9
 GbZ+dVgVY8ZXDTgduC+QEnD/86xqLS9A8XegWdFYXsaIDsMbZOpKI8b4ssUsdwps
@@ -36,9 +32,7 @@ vPXapxtVJo8UMN//4eglfk4QPNQ4BGoYBuzYkjRtvB7k4Dj5az7Q/epPnV9uYAfg
 w3/eZwP9wtc/3sAZHdzha45e
 -----END PRIVATE KEY-----`;
 
-// Same key as TEST_PEM, but in PKCS#1 (RSA-specific) format. GitHub Apps
-// generate keys this way; signAppJwt must wrap them in PKCS#8 internally.
-const TEST_PEM_PKCS1 = `-----BEGIN RSA PRIVATE KEY-----
+const PKCS1_PEM = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA29ve6BFsfWP5UOFTk1dIlsJ5Lp/K0uHEWFvTYaw17NQMBop1
 B5NDGRm/xVv/xHT63mO+lkIvCLXavRm2fnVYFWPGVw04HbgvkBJw//Osai0vQPF3
 oFnRWF7GiA7DG2TqSiPG+LLFLHcKbGdkWCJzHvIO9E5oJZwVx+Nc2zWCpbtvdy//
@@ -66,39 +60,47 @@ U7lRLAZhyX+QIEou+Wv2sF+o5Q9++Lz12qcbVSaPFDDf/+HoJX5OEDzUOARqGAbs
 2JI0bbwe5OA4+Ws+0P3qT51fbmAH4MN/3mcD/cLXP97AGR3c4WuOXg==
 -----END RSA PRIVATE KEY-----`;
 
-describe("signAppJwt", () => {
-  it("produces a three-part JWT with valid header and payload claims", async () => {
-    const jwt = await signAppJwt("123456", TEST_PEM);
-    const parts = jwt.split(".");
-    expect(parts).toHaveLength(3);
+async function signOnce(key: CryptoKey, payload: string): Promise<string> {
+  const sig = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(payload),
+  );
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
-    const header = JSON.parse(b64UrlDecode(parts[0]!));
-    expect(header).toEqual({ alg: "RS256", typ: "JWT" });
-
-    const payload = JSON.parse(b64UrlDecode(parts[1]!));
-    expect(payload.iss).toBe("123456");
-    expect(typeof payload.iat).toBe("number");
-    expect(typeof payload.exp).toBe("number");
-    expect(payload.exp - payload.iat).toBeGreaterThan(0);
-    expect(payload.exp - payload.iat).toBeLessThanOrEqual(10 * 60 + 60);
+describe("importRsaPrivateKey", () => {
+  it("imports a PKCS#8 PEM", async () => {
+    const key = await importRsaPrivateKey(PKCS8_PEM);
+    expect(key.type).toBe("private");
+    expect(key.algorithm.name).toBe("RSASSA-PKCS1-v1_5");
   });
 
-  it("signature is base64url with no padding", async () => {
-    const jwt = await signAppJwt("123456", TEST_PEM);
-    const sig = jwt.split(".")[2]!;
-    expect(sig).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(sig).not.toContain("=");
+  it("imports a PKCS#1 PEM (the format GitHub Apps generate)", async () => {
+    const key = await importRsaPrivateKey(PKCS1_PEM);
+    expect(key.type).toBe("private");
   });
 
-  it("accepts PKCS#1 keys end-to-end (the format GitHub Apps generate)", async () => {
-    // PEM/format handling is the PEM importer's job (tested in pem-rsa.test.ts);
-    // this test covers signAppJwt's integration with whatever the importer returns.
-    const jwt = await signAppJwt("123456", TEST_PEM_PKCS1);
-    expect(jwt.split(".")).toHaveLength(3);
+  it("PKCS#1 and PKCS#8 forms of the same key sign payloads identically", async () => {
+    // Strongest correctness check: if PKCS#1→PKCS#8 wrapping is byte-correct,
+    // both keys produce the same RS256 signature for the same input.
+    const a = await importRsaPrivateKey(PKCS8_PEM);
+    const b = await importRsaPrivateKey(PKCS1_PEM);
+    const payload = "agent-workflows.test.payload";
+    expect(await signOnce(a, payload)).toBe(await signOnce(b, payload));
+  });
+
+  it("normalizes literal \\n sequences to actual newlines", async () => {
+    // Some env-var stores deliver multi-line values with literal "\n"
+    // sequences instead of real newlines. The importer must handle that.
+    const escaped = PKCS8_PEM.replace(/\n/g, "\\n");
+    const key = await importRsaPrivateKey(escaped);
+    expect(key.type).toBe("private");
+  });
+
+  it("rejects malformed PEM", async () => {
+    await expect(importRsaPrivateKey("not a pem")).rejects.toThrow();
   });
 });
-
-function b64UrlDecode(s: string): string {
-  const padded = s.replace(/-/g, "+").replace(/_/g, "/").padEnd(s.length + ((4 - (s.length % 4)) % 4), "=");
-  return atob(padded);
-}
