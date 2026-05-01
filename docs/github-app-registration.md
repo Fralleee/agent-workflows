@@ -38,12 +38,11 @@ Leave **Organization permissions** and **Account permissions** unset.
 
 ## 3. Subscribe to events
 
-Under **Subscribe to events**, check:
+Under **Subscribe to events**, **leave every checkbox unchecked.**
 
-- `Installation` — fires when a user installs/uninstalls
-- `Installation repositories` — fires when a user adds/removes repos from an existing install
+GitHub already sends the App-lifecycle webhooks (`installation`, `installation_repositories`, `installation_target`, `meta`) to every App automatically — they don't appear on this list because they're not subscribable. The "Subscribe to events" page is for *additional* webhooks (pushes, PRs, issues, etc.), and our App doesn't react to any of those — the install flow is fully synchronous via `/setup`.
 
-That's it. The Edge function doesn't act on these today (the install flow is synchronous via `/setup`), but the App requires the webhook URL to be live.
+The webhook URL still has to be live (the App requires it), but our `/webhook` endpoint just verifies the HMAC and returns 204.
 
 ## 4. Where can this app be installed?
 
