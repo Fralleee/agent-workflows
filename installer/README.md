@@ -50,7 +50,7 @@ Set env vars one-time via `bunx vercel env add` — see the deployment doc.
 
 ```
 api/
-  [[...slug]].ts         Vercel Edge entry. Reads process.env, builds the app, exports GET/POST.
+  index.ts         Vercel Edge entry. Reads process.env, builds the app, exports GET/POST.
 
 src/
   app.ts                 Hono application factory — runtime-independent.
@@ -85,7 +85,7 @@ vercel.json              Rewrites every non-/api/ path to the catch-all function
 
 ## Routing
 
-We want clean URLs (`/setup`, `/install`, `/webhook`) rather than `/api/setup` etc., so [`vercel.json`](vercel.json) rewrites everything to the catch-all `api/[[...slug]].ts`. Vercel preserves the original URL in `request.url`, so Hono inside the function dispatches based on the user-facing path. The result: GitHub sees `https://yoursite.vercel.app/setup` and the function gets `/setup` to route on.
+We want clean URLs (`/setup`, `/install`, `/webhook`) rather than `/api/setup` etc., so [`vercel.json`](vercel.json) rewrites every non-`/api/*` path to `/api`, which Vercel resolves to `api/index.ts`. Vercel preserves the original URL in `request.url`, so Hono inside the function dispatches based on the user-facing path. The result: GitHub sees `https://yoursite.vercel.app/setup` and the function gets `/setup` to route on.
 
 ## Why Edge runtime (not Node)
 

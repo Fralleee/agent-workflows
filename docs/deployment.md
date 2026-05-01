@@ -19,7 +19,7 @@ bun install
 
 ## 2. Set Framework Preset to "Other" in the project settings
 
-When the project is first created, Vercel scans `package.json` and auto-detects **Hono** as the framework (because we depend on `hono`). The Hono preset expects a `src/index.ts` with `export default app` and tries to deploy that as a Node serverless function — which conflicts with our setup (Edge runtime, custom `api/[[...slug]].ts` catch-all, no top-level default export).
+When the project is first created, Vercel scans `package.json` and auto-detects **Hono** as the framework (because we depend on `hono`). The Hono preset expects a `src/index.ts` with `export default app` and tries to deploy that as a Node serverless function — which conflicts with our setup (Edge runtime, custom `api/index.ts` entry, no top-level default export).
 
 In the project settings under **Build and Deployment → Framework Preset**, click **Override** and select **Other**. Save. With "Other", Vercel only deploys files in `api/*` as functions and respects our `vercel.json` rewrites.
 
@@ -168,7 +168,7 @@ Our Edge function is ~50 KB and each repo install does ~7 GitHub API calls (~2�
 
 ## Architecture notes
 
-- **Runtime**: Edge runtime (`export const runtime = 'edge'` in `api/[[...slug]].ts`). Cold starts are ~5–50ms — much faster than Node serverless functions on Vercel.
-- **Routing**: `vercel.json` rewrites every non-`/api/*` path to the catch-all function at `api/[[...slug]].ts`. Hono inside the function reads `request.url` (which Vercel preserves as the original `/setup`, `/install`, etc.) and dispatches.
+- **Runtime**: Edge runtime (`export const runtime = 'edge'` in `api/index.ts`). Cold starts are ~5–50ms — much faster than Node serverless functions on Vercel.
+- **Routing**: `vercel.json` rewrites every non-`/api/*` path to the catch-all function at `api/index.ts`. Hono inside the function reads `request.url` (which Vercel preserves as the original `/setup`, `/install`, etc.) and dispatches.
 - **Secrets**: All sensitive env vars are Vercel-managed. They never touch the repo. Locally, `vercel env pull` materializes them into `.env.local` (gitignored).
 - **Statelessness**: The function persists nothing across requests. No KV, no DB. Each install is one HTTP request, scoped by the `installation_id` query parameter.
